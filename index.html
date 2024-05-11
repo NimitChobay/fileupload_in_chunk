@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chunked File Upload with Validation</title>
+  <script src="filesaver.js"></script>
+  <script>
+    const uploadDir = 'http://localhost:8080/api/upload'; // Replace with your actual upload endpoint
+
+    function initiateFileUpload(file) {
+      if (!file) {
+        console.error("Please select a file to upload.");
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const arrayBuffer = e.target.result;
+        const checksum = calculateChecksum(arrayBuffer); // Calculate checksum (e.g., MD5)
+console.log(file);
+        const metadata = {
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+          checksum: checksum
+        };
+console.log(metadata);
+        fetch(`${uploadDir}/metadata`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(metadata)
+        })
+        .then(response => response.text())
+        .then(uniqueId => {
+          uploadFile(file, uniqueId);
+        })
+        .catch(error => console.error("Metadata store error:", error));
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function uploadFile(file, uniqueId) {
+      const chunkSize = 1024 * 1024; // 1MB chunks (adjust as needed)
+
+      
+      let totalChunks = Math.ceil(file.size / chunkSize);
+	  let chunkNumber = 0;
+      for (let start = 0; start < file.size; start += chunkSize) {
+        const end = Math.min(start + chunkSize, file.size);
+        const chunk = file.slice(start, end);
+
+        const formData = new FormData();
+        formData.append("file", chunk);
+        formData.append("chunkNumber", ++chunkNumber);
+        formData.append("totalChunks", totalChunks);
+        formData.append("metadataId", uniqueId);
+        formData.append("checksum", calculateChecksum(chunk)); // Add checksum for each chunk
+	
+
+        fetch(`${uploadDir}`, {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.text())
+        .then(data => {
+          console.log("uploaded:", data);
+          
+        })
+        .catch(error => console.error("Upload error:", error));
+		
+      }
+    }
+
+    function calculateChecksum(arrayBuffer) {
+      // Implement your chosen checksum algorithm (e.g., using a library like SparkMD5)
+      // This example uses a placeholder function
+      return "placeholder-checksum";
+    }
+  </script>
+</head>
+<body>
+  <input type="file" id="fileInput" onchange="initiateFileUpload(this.files[0])">
+  <span id="uploadStatus"></span>
+</body>
+</html>
